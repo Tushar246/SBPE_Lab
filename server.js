@@ -1,7 +1,9 @@
 const express = require("express");
 const axios = require("axios");
+const path = require("path");
 
 const app = express();
+app.use(express.static('views')); // Serve static files from the "views" directory
 const PORT = 3000;
 
 app.get("/", (req, res) => {
@@ -31,6 +33,9 @@ app.get("/metabolite/:id", async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // PROTEINS ROUTE — with organism filter + keyword filter
 //
+// linked to /metabolite/:id/proteins
+// Returns proteins that contain the specified ligand, with optional filters for organism and keyword in title.
+//
 // Examples:
 // /metabolite/ATP/proteins
 // /metabolite/ATP/proteins?limit=50
@@ -42,8 +47,8 @@ app.get("/metabolite/:id/proteins", async (req, res) => {
     try {
         const ligandId  = req.params.id.toUpperCase();
         const limit     = parseInt(req.query.limit)    || 100;
-        const organism  = req.query.organism           || null; // e.g. "Homo sapiens"
-        const keyword   = req.query.keyword            || null; // e.g. "kinase"
+        const organism  = req.query.organisms         || null; 
+        const keyword   = req.query.keyword            || null; 
 
         // ── Build search conditions ──────────────────────────
         // We always search by ligand ID
