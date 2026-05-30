@@ -95,7 +95,6 @@
 
   .breadcrumb a { color: var(--green); text-decoration: none; }
 
-  /* header info */
   .ligand-header {
     display: grid;
     grid-template-columns: 1fr auto;
@@ -123,17 +122,9 @@
     margin-bottom: 1rem;
   }
 
-  .ligand-meta {
-    display: flex;
-    gap: 1.5rem;
-    flex-wrap: wrap;
-  }
+  .ligand-meta { display: flex; gap: 1.5rem; flex-wrap: wrap; }
 
-  .meta-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-  }
+  .meta-item { display: flex; flex-direction: column; gap: 0.2rem; }
 
   .meta-item label {
     font-family: var(--mono);
@@ -175,7 +166,6 @@
 
   .btn-outline:hover { color: var(--green); border-color: var(--green); background: var(--green-dim); }
 
-  /* filters */
   .filters {
     background: var(--bg2);
     border: 1px solid var(--border);
@@ -198,7 +188,7 @@
     text-transform: uppercase;
   }
 
-  .filter-group input, .filter-group select {
+  .filter-group input {
     background: var(--bg3);
     border: 1px solid var(--border-bright);
     color: var(--text);
@@ -211,8 +201,7 @@
   }
 
   .filter-group input::placeholder { color: var(--text-muted); }
-  .filter-group input:focus, .filter-group select:focus { border-color: var(--green); }
-  .filter-group select option { background: var(--bg3); }
+  .filter-group input:focus { border-color: var(--green); }
 
   .btn-apply {
     background: var(--green);
@@ -231,7 +220,6 @@
 
   .btn-apply:hover { opacity: 0.85; }
 
-  /* results info bar */
   .results-bar {
     display: flex;
     align-items: center;
@@ -247,7 +235,6 @@
 
   .results-count strong { color: var(--green); }
 
-  /* protein grid */
   .protein-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -304,7 +291,6 @@
 
   .protein-card:hover .protein-arrow { color: var(--green); }
 
-  /* states */
   .state-msg {
     font-family: var(--mono);
     font-size: 0.8rem;
@@ -316,7 +302,7 @@
   }
 
   .state-msg.loading { color: var(--green); }
-  .state-msg.error { color: #f07070; border-color: rgba(220,50,50,0.3); }
+  .state-msg.error   { color: #f07070; border-color: rgba(220,50,50,0.3); }
 
   .load-more {
     margin-top: 1px;
@@ -351,7 +337,6 @@
 <div class="page">
   <div class="breadcrumb"><a href="index.html">Home</a> / <span id="bc-id">...</span></div>
 
-  <!-- filled by JS -->
   <div class="ligand-header" id="ligand-header">
     <div>
       <div class="ligand-code" id="lcode">Loading...</div>
@@ -361,7 +346,6 @@
     <div class="header-actions" id="lactions"></div>
   </div>
 
-  <!-- filters -->
   <div class="filters">
     <div class="filter-group">
       <label>Organism</label>
@@ -390,18 +374,17 @@
 </div>
 
 <script>
-  const params = new URLSearchParams(location.search);
+  const params   = new URLSearchParams(location.search);
   const ligandId = (params.get('id') || 'ATP').toUpperCase();
 
   let currentOffset = 0;
-  const PAGE_SIZE = 24;
+  const PAGE_SIZE   = 24;
   let totalAvailable = 0;
   let allCards = [];
 
-  // Update breadcrumb
   document.getElementById('bc-id').textContent = ligandId;
 
-  // Fetch metabolite info
+  // ── Load metabolite name / formula / weight ──────────────────
   async function loadMetaboliteInfo() {
     try {
       const res = await fetch(`http://localhost:3000/metabolite/${ligandId}`);
@@ -425,32 +408,38 @@
       `;
 
       document.getElementById('lactions').innerHTML = `
-        <a class="btn btn-outline" href="http://localhost:3000/metabolite/${ligandId}/structure" target="_blank">Download SDF</a>
-        <a class="btn btn-outline" href="https://www.rcsb.org/ligand/${ligandId}" target="_blank">RCSB page ↗</a>
+        <a class="btn btn-outline"
+           href="http://localhost:3000/metabolite/${ligandId}/structure"
+           target="_blank">Download SDF</a>
+        <a class="btn btn-outline"
+           href="https://www.rcsb.org/ligand/${ligandId}"
+           target="_blank">RCSB page ↗</a>
       `;
     } catch {
       document.getElementById('lname').textContent = ligandId;
     }
   }
 
-  // Build query URL
+  // ── Build URL for /proteins — all params sent correctly ──────
   function buildUrl(offset) {
     const organism = document.getElementById('f-organism').value.trim();
     const keyword  = document.getElementById('f-keyword').value.trim();
     const gene     = document.getElementById('f-gene').value.trim();
-    const limit    = PAGE_SIZE;
 
-    let url = `http://localhost:3000/metabolite/${ligandId}/proteins?limit=${limit}&start=${offset}`;
-    if (organism) url += `&organisms=${encodeURIComponent(organism)}`;
+    // FIX: &organism= (no 's') — must match req.query.organism in index.js
+    let url = `http://localhost:3000/metabolite/${ligandId}/proteins?limit=${PAGE_SIZE}&start=${offset}`;
+    if (organism) url += `&organism=${encodeURIComponent(organism)}`;
     if (keyword)  url += `&keyword=${encodeURIComponent(keyword)}`;
     if (gene)     url += `&gene=${encodeURIComponent(gene)}`;
     return url;
   }
 
-  // Render a batch of protein cards
+  // ── Render protein image cards ───────────────────────────────
   function renderCards(proteins) {
     return proteins.map(p => `
-      <a class="protein-card" href="https://www.rcsb.org/structure/${p.pdbId}" target="_blank">
+      <a class="protein-card"
+         href="https://www.rcsb.org/structure/${p.pdbId}"
+         target="_blank">
         <img class="protein-img"
           src="${p.image}"
           alt="${p.pdbId} structure"
@@ -464,10 +453,11 @@
     `).join('');
   }
 
+  // ── First load or after filter change ───────────────────────
   async function loadProteins(reset = false) {
     if (reset) {
       currentOffset = 0;
-      allCards = [];
+      allCards      = [];
       document.getElementById('protein-grid-wrap').innerHTML =
         `<div class="state-msg loading">// querying RCSB PDB ...</div>`;
       document.getElementById('results-count').textContent = '';
@@ -482,7 +472,7 @@
       totalAvailable = data.totalAvailable || 0;
       const proteins = data.proteins || [];
 
-      allCards = [...allCards, ...proteins];
+      allCards       = [...allCards, ...proteins];
       currentOffset += proteins.length;
 
       if (allCards.length === 0) {
@@ -498,11 +488,10 @@
       document.getElementById('protein-grid-wrap').innerHTML =
         `<div class="protein-grid">${renderCards(allCards)}</div>`;
 
-      // show load more if more exist
       const btn = document.getElementById('load-more-btn');
       if (allCards.length < totalAvailable) {
         btn.style.display = 'block';
-        btn.textContent = `Load more — ${totalAvailable - allCards.length} remaining →`;
+        btn.textContent   = `Load more — ${totalAvailable - allCards.length} remaining →`;
       } else {
         btn.style.display = 'none';
       }
@@ -513,17 +502,18 @@
     }
   }
 
+  // ── Load more pages ──────────────────────────────────────────
   async function loadMore() {
-    const btn = document.getElementById('load-more-btn');
+    const btn     = document.getElementById('load-more-btn');
     btn.textContent = '// loading ...';
-    btn.disabled = true;
+    btn.disabled    = true;
 
     try {
-      const res = await fetch(buildUrl(currentOffset));
+      const res  = await fetch(buildUrl(currentOffset));
       const data = await res.json();
       const proteins = data.proteins || [];
 
-      allCards = [...allCards, ...proteins];
+      allCards       = [...allCards, ...proteins];
       currentOffset += proteins.length;
 
       document.getElementById('results-count').innerHTML =
@@ -534,24 +524,24 @@
 
       if (allCards.length < totalAvailable) {
         btn.textContent = `Load more — ${totalAvailable - allCards.length} remaining →`;
-        btn.disabled = false;
+        btn.disabled    = false;
       } else {
         btn.style.display = 'none';
       }
     } catch {
       btn.textContent = 'Load more →';
-      btn.disabled = false;
+      btn.disabled    = false;
     }
   }
 
-  // allow Enter key in filters
-  ['f-organism','f-keyword','f-gene'].forEach(id => {
+  // ── Enter key support in filter inputs ───────────────────────
+  ['f-organism', 'f-keyword', 'f-gene'].forEach(id => {
     document.getElementById(id).addEventListener('keydown', e => {
       if (e.key === 'Enter') loadProteins(true);
     });
   });
 
-  // init
+  // ── Init ─────────────────────────────────────────────────────
   loadMetaboliteInfo();
   loadProteins(true);
 </script>
