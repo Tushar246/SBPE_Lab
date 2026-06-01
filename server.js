@@ -23,7 +23,7 @@ app.get("/", (req, res) => {
 // Returns Buffer on success, null after all retries fail
 // ─────────────────────────────────────────────────────────────
 async function fetchFileBuffer(pdbId, retries = 3) {
-    const url = `https://files.rcsb.org/download/${pdbId}.cif`;
+    const url = `https://files.rcsb.org/download/${pdbId}.pdb1.gz`;
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             const res = await axios.get(url, {
@@ -208,11 +208,6 @@ app.get("/metabolite/:id/download/ids", async (req, res) => {
         }
 
         const content = [
-            `# PDB IDs for ligand: ${ligandId}`,
-            `# Total: ${total}`,
-            `# Filters: organism=${organism || "any"} | keyword=${keyword || "any"} | method=${experimentMethod || "any"}`,
-            `# Generated: ${new Date().toISOString()}`,
-            ``,
             ...ids
         ].join("\n");
 
@@ -229,7 +224,7 @@ app.get("/metabolite/:id/download/ids", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // GET /metabolite/:id/download/structures
-// Downloads ALL .cif structure files packed into a zip
+// Downloads ALL .pdb structure files packed into a zip
 //
 // FIX 1: use arraybuffer not stream — stream+archiver = race condition = 500
 // FIX 2: batches of 5 with retry per file — prevents RCSB rate limit errors
@@ -263,21 +258,7 @@ app.get("/metabolite/:id/download/structures", async (req, res) => {
 
         archive.pipe(res);
 
-        // Add README inside the zip
-        const summary = [
-            `Ligand: ${ligandId}`,
-            `Total structures: ${total}`,
-            `Filters: organism=${organism || "any"} | keyword=${keyword || "any"} | method=${experimentMethod || "any"}`,
-            `Downloaded: ${new Date().toISOString()}`,
-            ``,
-            `Each .cif file = full 3D atomic coordinates (mmCIF format)`,
-            `Open with: PyMOL, UCSF Chimera, VMD, Mol*, or https://www.rcsb.org/3d-view`,
-            ``,
-            `PDB IDs:`,
-            ...ids
-        ].join("\n");
 
-        archive.append(Buffer.from(summary, "utf8"), { name: "README.txt" });
 
         // Download files in batches of 5 with retry
         const BATCH_SIZE = 5;
@@ -299,9 +280,9 @@ app.get("/metabolite/:id/download/structures", async (req, res) => {
             for (const { pdbId, buf } of results) {
                 if (buf) {
                     // FIX 1: append buffer directly — no stream race condition
-                    archive.append(buf, { name: `${pdbId}.cif` });
+                    archive.append(buf, { name: `${pdbId}.pdb1.gz` });
                     done++;
-                    console.log(`[${done}/${total}] ${pdbId}.cif`);
+                    console.log(`[${done}/${total}] ${pdbId}.pdb1.gz added to zip.`);
                 } else {
                     failed.push(pdbId);
                     archive.append(
