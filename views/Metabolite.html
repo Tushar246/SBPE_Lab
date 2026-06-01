@@ -7,320 +7,132 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --bg: #0a0e0d;
-    --bg2: #111714;
-    --bg3: #1a2219;
-    --border: rgba(74,200,120,0.15);
-    --border-bright: rgba(74,200,120,0.4);
-    --green: #4ac878;
-    --green-dim: rgba(74,200,120,0.08);
-    --text: #e8f5ee;
-    --text-dim: #7a9e85;
-    --text-muted: #3d5e47;
-    --mono: 'DM Mono', monospace;
-    --sans: 'Syne', sans-serif;
+    --bg: #0a0e0d; --bg2: #111714; --bg3: #1a2219;
+    --border: rgba(74,200,120,0.15); --border-bright: rgba(74,200,120,0.4);
+    --green: #4ac878; --green-dim: rgba(74,200,120,0.08);
+    --text: #e8f5ee; --text-dim: #7a9e85; --text-muted: #3d5e47;
+    --mono: 'DM Mono', monospace; --sans: 'Syne', sans-serif;
   }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    min-height: 100vh;
-  }
-
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
   body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(74,200,120,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(74,200,120,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(74,200,120,0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(74,200,120,0.03) 1px, transparent 1px);
+    background-size: 40px 40px; pointer-events: none; z-index: 0;
   }
-
   nav {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem 2rem;
-    background: rgba(10,14,13,0.9);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2rem; background: rgba(10,14,13,0.9);
+    backdrop-filter: blur(12px); border-bottom: 1px solid var(--border);
   }
-
-  .nav-logo {
-    font-size: 1.1rem;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    color: var(--green);
-    text-decoration: none;
-  }
-
+  .nav-logo { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.05em; color: var(--green); text-decoration: none; }
   .nav-logo span { color: var(--text-dim); font-weight: 400; }
-
-  nav a {
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    color: var(--text-dim);
-    text-decoration: none;
-    letter-spacing: 0.05em;
-    transition: color 0.2s;
-  }
-
+  nav a { font-family: var(--mono); font-size: 0.78rem; color: var(--text-dim); text-decoration: none; letter-spacing: 0.05em; transition: color 0.2s; }
   nav a:hover { color: var(--green); }
   nav ul { list-style: none; display: flex; gap: 2rem; }
 
-  .page {
-    position: relative;
-    z-index: 1;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2.5rem 2rem 5rem;
-  }
-
-  .breadcrumb {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    letter-spacing: 0.08em;
-    margin-bottom: 2rem;
-  }
-
+  .page { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 2.5rem 2rem 5rem; }
+  .breadcrumb { font-family: var(--mono); font-size: 0.72rem; color: var(--text-muted); letter-spacing: 0.08em; margin-bottom: 2rem; }
   .breadcrumb a { color: var(--green); text-decoration: none; }
 
-  .ligand-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 1.5rem;
-    align-items: start;
-    margin-bottom: 2.5rem;
-    padding-bottom: 2rem;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .ligand-code {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.12em;
-    color: var(--green);
-    text-transform: uppercase;
-    margin-bottom: 0.4rem;
-  }
-
-  .ligand-name {
-    font-size: 2rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
-    line-height: 1.1;
-    margin-bottom: 1rem;
-  }
-
+  .ligand-header { display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; align-items: start; margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--border); }
+  .ligand-code { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.12em; color: var(--green); text-transform: uppercase; margin-bottom: 0.4rem; }
+  .ligand-name { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 1rem; }
   .ligand-meta { display: flex; gap: 1.5rem; flex-wrap: wrap; }
-
   .meta-item { display: flex; flex-direction: column; gap: 0.2rem; }
-
-  .meta-item label {
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    text-transform: uppercase;
-  }
-
-  .meta-item span {
-    font-family: var(--mono);
-    font-size: 0.88rem;
-    color: var(--text);
-  }
-
+  .meta-item label { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; }
+  .meta-item span { font-family: var(--mono); font-size: 0.88rem; color: var(--text); }
   .header-actions { display: flex; flex-direction: column; gap: 0.6rem; align-items: flex-end; }
 
-  .btn {
-    font-family: var(--mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.08em;
-    padding: 0.55rem 1rem;
-    border-radius: 3px;
-    cursor: pointer;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    transition: all 0.15s;
-    border: 1px solid transparent;
-    white-space: nowrap;
-  }
-
-  .btn-outline {
-    background: transparent;
-    color: var(--text-dim);
-    border-color: var(--border-bright);
-  }
-
+  .btn { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.08em; padding: 0.55rem 1rem; border-radius: 3px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 0.4rem; transition: all 0.15s; border: 1px solid transparent; white-space: nowrap; }
+  .btn-outline { background: transparent; color: var(--text-dim); border-color: var(--border-bright); }
   .btn-outline:hover { color: var(--green); border-color: var(--green); background: var(--green-dim); }
 
-  .filters {
+  .filters { background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 1.4rem; margin-bottom: 1rem; display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.8rem; align-items: end; }
+  .filter-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  .filter-group label { font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.1em; color: var(--text-muted); text-transform: uppercase; }
+  .filter-group input, .filter-group select { background: var(--bg3); border: 1px solid var(--border-bright); color: var(--text); font-family: var(--mono); font-size: 0.82rem; padding: 0.6rem 0.9rem; border-radius: 3px; outline: none; transition: border-color 0.2s; }
+  .filter-group input::placeholder { color: var(--text-muted); }
+  .filter-group input:focus, .filter-group select:focus { border-color: var(--green); }
+  .filter-group select option { background: var(--bg3); }
+  .btn-apply { background: var(--green); color: #0a0e0d; border: none; font-family: var(--mono); font-size: 0.75rem; font-weight: 500; letter-spacing: 0.08em; padding: 0.65rem 1.4rem; border-radius: 3px; cursor: pointer; transition: opacity 0.2s; white-space: nowrap; }
+  .btn-apply:hover { opacity: 0.85; }
+
+  /* download bar — sits below filters */
+  .download-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 1rem 1.2rem;
     background: var(--bg2);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1.4rem;
-    margin-bottom: 2rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr auto;
-    gap: 0.8rem;
-    align-items: end;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
   }
-
-  .filter-group { display: flex; flex-direction: column; gap: 0.4rem; }
-
-  .filter-group label {
+  .download-label {
     font-family: var(--mono);
-    font-size: 0.65rem;
+    font-size: 0.68rem;
     letter-spacing: 0.1em;
     color: var(--text-muted);
     text-transform: uppercase;
+    margin-right: 0.4rem;
+  }
+  .btn-download {
+    font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.07em;
+    padding: 0.45rem 1rem; border-radius: 3px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    transition: all 0.15s; border: 1px solid var(--border-bright);
+    background: transparent; color: var(--text-dim); white-space: nowrap;
+  }
+  .btn-download:hover { color: var(--green); border-color: var(--green); background: var(--green-dim); }
+  .btn-download.loading { opacity: 0.5; cursor: not-allowed; }
+  .download-note {
+    font-family: var(--mono); font-size: 0.65rem;
+    color: var(--text-muted); margin-left: auto;
   }
 
-  .filter-group input {
-    background: var(--bg3);
-    border: 1px solid var(--border-bright);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 0.82rem;
-    padding: 0.6rem 0.9rem;
-    border-radius: 3px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-
-  .filter-group input::placeholder { color: var(--text-muted); }
-  .filter-group input:focus { border-color: var(--green); }
-
-  .btn-apply {
-    background: var(--green);
-    color: #0a0e0d;
-    border: none;
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    padding: 0.65rem 1.4rem;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: opacity 0.2s;
-    white-space: nowrap;
-  }
-
-  .btn-apply:hover { opacity: 0.85; }
-
-  .results-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1.2rem;
-  }
-
-  .results-count {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
+  .results-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.2rem; }
+  .results-count { font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted); }
   .results-count strong { color: var(--green); }
 
-  .protein-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1px;
-    background: var(--border);
-    border: 1px solid var(--border);
-  }
-
-  .protein-card {
-    background: var(--bg2);
-    transition: background 0.15s;
-    cursor: pointer;
-    text-decoration: none;
-    display: block;
-    overflow: hidden;
-  }
-
+  .protein-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); }
+  .protein-card { background: var(--bg2); transition: background 0.15s; cursor: pointer; text-decoration: none; display: block; overflow: hidden; }
   .protein-card:hover { background: var(--bg3); }
-
-  .protein-img {
-    width: 100%;
-    aspect-ratio: 1;
-    object-fit: cover;
-    display: block;
-    background: var(--bg3);
-    border-bottom: 1px solid var(--border);
-    filter: saturate(0.6) brightness(0.9);
-    transition: filter 0.3s;
-  }
-
+  .protein-img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--bg3); border-bottom: 1px solid var(--border); filter: saturate(0.6) brightness(0.9); transition: filter 0.3s; }
   .protein-card:hover .protein-img { filter: saturate(1) brightness(1); }
-
-  .protein-info {
-    padding: 0.9rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .protein-id {
-    font-family: var(--mono);
-    font-size: 0.95rem;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    color: var(--text);
-  }
-
-  .protein-arrow {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    transition: color 0.15s;
-  }
-
+  .protein-info { padding: 0.9rem 1rem; display: flex; align-items: center; justify-content: space-between; }
+  .protein-id { font-family: var(--mono); font-size: 0.95rem; font-weight: 500; letter-spacing: 0.08em; color: var(--text); }
+  .protein-arrow { font-family: var(--mono); font-size: 0.75rem; color: var(--text-muted); transition: color 0.15s; }
   .protein-card:hover .protein-arrow { color: var(--green); }
 
-  .state-msg {
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    padding: 3rem 2rem;
-    text-align: center;
-    color: var(--text-muted);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-  }
-
+  .state-msg { font-family: var(--mono); font-size: 0.8rem; padding: 3rem 2rem; text-align: center; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; line-height: 1.8; }
   .state-msg.loading { color: var(--green); }
-  .state-msg.error   { color: #f07070; border-color: rgba(220,50,50,0.3); }
+  .state-msg.error { color: #f07070; border-color: rgba(220,50,50,0.3); }
 
-  .load-more {
-    margin-top: 1px;
-    width: 100%;
-    background: var(--bg2);
-    border: none;
-    border-top: 1px solid var(--border);
-    color: var(--text-dim);
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    padding: 1.1rem;
-    cursor: pointer;
-    transition: all 0.15s;
-    display: none;
-  }
-
+  .load-more { margin-top: 1px; width: 100%; background: var(--bg2); border: none; border-top: 1px solid var(--border); color: var(--text-dim); font-family: var(--mono); font-size: 0.75rem; letter-spacing: 0.08em; padding: 1.1rem; cursor: pointer; transition: all 0.15s; display: none; }
   .load-more:hover { background: var(--bg3); color: var(--green); }
+
+  /* progress overlay for structure download */
+  .progress-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(10,14,13,0.85); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+  }
+  .progress-overlay.active { display: flex; }
+  .progress-box {
+    background: var(--bg2); border: 1px solid var(--border-bright);
+    border-radius: 6px; padding: 2.5rem 3rem; text-align: center; max-width: 420px;
+  }
+  .progress-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+  .progress-sub { font-family: var(--mono); font-size: 0.75rem; color: var(--text-dim); margin-bottom: 1.5rem; line-height: 1.6; }
+  .progress-bar-wrap { background: var(--bg3); border-radius: 2px; height: 4px; overflow: hidden; }
+  .progress-bar-fill { height: 100%; background: var(--green); width: 100%; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 </style>
 </head>
 <body>
@@ -334,18 +146,34 @@
   </ul>
 </nav>
 
+<!-- download progress overlay -->
+<div class="progress-overlay" id="progress-overlay">
+  <div class="progress-box">
+    <div class="progress-title">Downloading structures</div>
+    <div class="progress-sub" id="progress-msg">
+      Fetching all PDB IDs...<br/>
+      Large downloads may take several minutes.<br/>
+      Do not close this tab.
+    </div>
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill"></div>
+    </div>
+  </div>
+</div>
+
 <div class="page">
   <div class="breadcrumb"><a href="index.html">Home</a> / <span id="bc-id">...</span></div>
 
-  <div class="ligand-header" id="ligand-header">
+  <div class="ligand-header">
     <div>
       <div class="ligand-code" id="lcode">Loading...</div>
-      <div class="ligand-name" id="lname">—</div>
-      <div class="ligand-meta" id="lmeta"></div>
+      <div class="ligand-name"  id="lname">—</div>
+      <div class="ligand-meta"  id="lmeta"></div>
     </div>
     <div class="header-actions" id="lactions"></div>
   </div>
 
+  <!-- filters -->
   <div class="filters">
     <div class="filter-group">
       <label>Organism</label>
@@ -356,10 +184,36 @@
       <input type="text" id="f-keyword" placeholder="e.g. kinase, receptor" />
     </div>
     <div class="filter-group">
-      <label>Gene</label>
-      <input type="text" id="f-gene" placeholder="e.g. EGFR, TP53" />
+      <label>Experiment Method</label>
+      <select id="f-method">
+        <option value="">Any method</option>
+        <option value="X-RAY DIFFRACTION">X-Ray Diffraction</option>
+        <option value="ELECTRON MICROSCOPY">Electron Microscopy</option>
+        <option value="SOLUTION NMR">Solution NMR</option>
+        <option value="NEUTRON DIFFRACTION">Neutron Diffraction</option>
+        <option value="ELECTRON CRYSTALLOGRAPHY">Electron Crystallography</option>
+        <option value="SOLID-STATE NMR">Solid-State NMR</option>
+      </select>
     </div>
     <button class="btn-apply" onclick="loadProteins(true)">Apply →</button>
+  </div>
+
+  <!-- download bar — always visible below filters -->
+  <div class="download-bar">
+    <span class="download-label">Download results:</span>
+
+    <!-- Download IDs as .txt -->
+    <button class="btn-download" id="btn-dl-ids" onclick="downloadIds()">
+      ⬇ PDB ID list (.txt)
+    </button>
+
+    <!-- Download all structures as .zip -->
+    <button class="btn-download" id="btn-dl-zip" onclick="downloadStructures()">
+      ⬇ All structures (.zip)
+    </button>
+
+    <!-- Dynamic note showing how many will be downloaded -->
+    <span class="download-note" id="dl-note">// run a search first</span>
   </div>
 
   <div class="results-bar">
@@ -377,14 +231,14 @@
   const params   = new URLSearchParams(location.search);
   const ligandId = (params.get('id') || 'ATP').toUpperCase();
 
-  let currentOffset = 0;
-  const PAGE_SIZE   = 24;
+  const PAGE_SIZE    = 25;
+  let currentOffset  = 0;
   let totalAvailable = 0;
-  let allCards = [];
+  let allCards       = [];
 
   document.getElementById('bc-id').textContent = ligandId;
 
-  // ── Load metabolite name / formula / weight ──────────────────
+  // ── Metabolite info ──────────────────────────────────────────
   async function loadMetaboliteInfo() {
     try {
       const res = await fetch(`http://localhost:3000/metabolite/${ligandId}`);
@@ -397,54 +251,41 @@
         d.name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
       document.getElementById('lmeta').innerHTML = `
-        <div class="meta-item">
-          <label>Formula</label>
-          <span>${d.formula}</span>
-        </div>
-        <div class="meta-item">
-          <label>Mol. weight</label>
-          <span>${Number(d.molecularWeight).toFixed(3)} g/mol</span>
-        </div>
+        <div class="meta-item"><label>Formula</label><span>${d.formula}</span></div>
+        <div class="meta-item"><label>Mol. weight</label><span>${Number(d.molecularWeight).toFixed(3)} g/mol</span></div>
       `;
-
       document.getElementById('lactions').innerHTML = `
-        <a class="btn btn-outline"
-           href="http://localhost:3000/metabolite/${ligandId}/structure"
-           target="_blank">Download SDF</a>
-        <a class="btn btn-outline"
-           href="https://www.rcsb.org/ligand/${ligandId}"
-           target="_blank">RCSB page ↗</a>
+        <a class="btn btn-outline" href="http://localhost:3000/metabolite/${ligandId}/structure" target="_blank">Download SDF</a>
+        <a class="btn btn-outline" href="https://www.rcsb.org/ligand/${ligandId}" target="_blank">RCSB page ↗</a>
       `;
     } catch {
       document.getElementById('lname').textContent = ligandId;
     }
   }
 
-  // ── Build URL for /proteins — all params sent correctly ──────
-  function buildUrl(offset) {
+  // ── Build filter query string (shared by all URLs) ───────────
+  function filterParams() {
     const organism = document.getElementById('f-organism').value.trim();
     const keyword  = document.getElementById('f-keyword').value.trim();
-    const gene     = document.getElementById('f-gene').value.trim();
-
-    // FIX: &organism= (no 's') — must match req.query.organism in index.js
-    let url = `http://localhost:3000/metabolite/${ligandId}/proteins?limit=${PAGE_SIZE}&start=${offset}`;
-    if (organism) url += `&organism=${encodeURIComponent(organism)}`;
-    if (keyword)  url += `&keyword=${encodeURIComponent(keyword)}`;
-    if (gene)     url += `&gene=${encodeURIComponent(gene)}`;
-    return url;
+    const method   = document.getElementById('f-method').value;
+    let p = '';
+    if (organism) p += `&organism=${encodeURIComponent(organism)}`;
+    if (keyword)  p += `&keyword=${encodeURIComponent(keyword)}`;
+    if (method)   p += `&experimentMethod=${encodeURIComponent(method)}`;
+    return p;
   }
 
-  // ── Render protein image cards ───────────────────────────────
+  // ── Build paginated URL for UI ───────────────────────────────
+  function buildUrl(offset) {
+    return `http://localhost:3000/metabolite/${ligandId}/proteins?limit=${PAGE_SIZE}&start=${offset}${filterParams()}`;
+  }
+
+  // ── Render cards ─────────────────────────────────────────────
   function renderCards(proteins) {
     return proteins.map(p => `
-      <a class="protein-card"
-         href="https://www.rcsb.org/structure/${p.pdbId}"
-         target="_blank">
-        <img class="protein-img"
-          src="${p.image}"
-          alt="${p.pdbId} structure"
-          onerror="this.src='https://placehold.co/300x300/111714/4ac878?text=${p.pdbId}'"
-        />
+      <a class="protein-card" href="https://www.rcsb.org/structure/${p.pdbId}" target="_blank">
+        <img class="protein-img" src="${p.image}" alt="${p.pdbId}"
+          onerror="this.src='https://placehold.co/300x300/111714/4ac878?text=${p.pdbId}'" />
         <div class="protein-info">
           <span class="protein-id">${p.pdbId}</span>
           <span class="protein-arrow">↗</span>
@@ -453,11 +294,20 @@
     `).join('');
   }
 
-  // ── First load or after filter change ───────────────────────
+  // ── Update download note ─────────────────────────────────────
+  function updateDownloadNote() {
+    const note = document.getElementById('dl-note');
+    if (totalAvailable === 0) {
+      note.textContent = '// run a search first';
+    } else {
+      note.textContent = `// will download all ${totalAvailable} results`;
+    }
+  }
+
+  // ── Load proteins ────────────────────────────────────────────
   async function loadProteins(reset = false) {
     if (reset) {
-      currentOffset = 0;
-      allCards      = [];
+      currentOffset = 0; allCards = [];
       document.getElementById('protein-grid-wrap').innerHTML =
         `<div class="state-msg loading">// querying RCSB PDB ...</div>`;
       document.getElementById('results-count').textContent = '';
@@ -465,26 +315,27 @@
     }
 
     try {
-      const res = await fetch(buildUrl(currentOffset));
-      if (!res.ok) throw new Error();
+      const res  = await fetch(buildUrl(currentOffset));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
-      totalAvailable = data.totalAvailable || 0;
-      const proteins = data.proteins || [];
+      totalAvailable  = data.totalAvailable || 0;
+      const proteins  = data.proteins || [];
+      allCards        = [...allCards, ...proteins];
+      currentOffset  += proteins.length;
 
-      allCards       = [...allCards, ...proteins];
-      currentOffset += proteins.length;
+      updateDownloadNote();
 
       if (allCards.length === 0) {
         document.getElementById('protein-grid-wrap').innerHTML =
-          `<div class="state-msg">// no protein structures found for "${ligandId}" with these filters.</div>`;
+          `<div class="state-msg">// no structures found for "${ligandId}" with these filters.<br/>
+           Tip: organism must be exact scientific name e.g. "Homo sapiens"</div>`;
         document.getElementById('results-count').textContent = '';
         return;
       }
 
       document.getElementById('results-count').innerHTML =
         `showing <strong>${allCards.length}</strong> of <strong>${totalAvailable}</strong> structures`;
-
       document.getElementById('protein-grid-wrap').innerHTML =
         `<div class="protein-grid">${renderCards(allCards)}</div>`;
 
@@ -498,44 +349,120 @@
 
     } catch (e) {
       document.getElementById('protein-grid-wrap').innerHTML =
-        `<div class="state-msg error">// error: could not fetch proteins. Is your server running on port 3000?</div>`;
+        `<div class="state-msg error">// error: ${e.message}<br/>Is your server running on port 3000?</div>`;
     }
   }
 
-  // ── Load more pages ──────────────────────────────────────────
+  // ── Load more ────────────────────────────────────────────────
   async function loadMore() {
-    const btn     = document.getElementById('load-more-btn');
-    btn.textContent = '// loading ...';
-    btn.disabled    = true;
-
+    const btn = document.getElementById('load-more-btn');
+    btn.textContent = '// loading ...'; btn.disabled = true;
     try {
-      const res  = await fetch(buildUrl(currentOffset));
-      const data = await res.json();
+      const res      = await fetch(buildUrl(currentOffset));
+      const data     = await res.json();
       const proteins = data.proteins || [];
-
       allCards       = [...allCards, ...proteins];
       currentOffset += proteins.length;
 
       document.getElementById('results-count').innerHTML =
         `showing <strong>${allCards.length}</strong> of <strong>${totalAvailable}</strong> structures`;
-
       document.getElementById('protein-grid-wrap').innerHTML =
         `<div class="protein-grid">${renderCards(allCards)}</div>`;
 
       if (allCards.length < totalAvailable) {
         btn.textContent = `Load more — ${totalAvailable - allCards.length} remaining →`;
         btn.disabled    = false;
-      } else {
-        btn.style.display = 'none';
-      }
-    } catch {
-      btn.textContent = 'Load more →';
-      btn.disabled    = false;
-    }
+      } else { btn.style.display = 'none'; }
+    } catch { btn.textContent = 'Load more →'; btn.disabled = false; }
   }
 
-  // ── Enter key support in filter inputs ───────────────────────
-  ['f-organism', 'f-keyword', 'f-gene'].forEach(id => {
+  // ── DOWNLOAD: PDB ID list as .txt ────────────────────────────
+  // Hits /download/ids — server fetches ALL ids with no limit
+  // Browser receives a .txt file immediately
+  function downloadIds() {
+    if (totalAvailable === 0) {
+      alert('Run a search first before downloading.');
+      return;
+    }
+
+    const btn = document.getElementById('btn-dl-ids');
+    btn.textContent = '// fetching all ids ...';
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    // Build download URL with same active filters
+    const url = `http://localhost:3000/metabolite/${ligandId}/download/ids?${filterParams().slice(1)}`;
+
+    // Use a hidden <a> to trigger file download
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${ligandId}_pdb_ids.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Reset button after short delay
+    setTimeout(() => {
+      btn.textContent = '⬇ PDB ID list (.txt)';
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }, 3000);
+  }
+
+  // ── DOWNLOAD: All structures as .zip ─────────────────────────
+  // Hits /download/structures — server fetches ALL files and streams a zip
+  // This can take a long time for large result sets
+  function downloadStructures() {
+    if (totalAvailable === 0) {
+      alert('Run a search first before downloading.');
+      return;
+    }
+
+    const confirmMsg =
+      `You are about to download ${totalAvailable} protein structure files (.cif) in a zip.\n\n` +
+      `Estimated size: ~${Math.round(totalAvailable * 0.5)} MB\n` +
+      `Estimated time: ${totalAvailable > 500 ? 'several minutes' : 'about a minute'}\n\n` +
+      `The server will fetch every file from RCSB and stream them to you.\n` +
+      `Do not close the tab during download.\n\nContinue?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    // Show progress overlay
+    document.getElementById('progress-overlay').classList.add('active');
+    document.getElementById('progress-msg').innerHTML =
+      `Fetching all ${totalAvailable} structures from RCSB...<br/>
+       Streaming into zip file.<br/>
+       Do not close this tab.`;
+
+    const url = `http://localhost:3000/metabolite/${ligandId}/download/structures?${filterParams().slice(1)}`;
+
+    // fetch() with streaming so we can trigger the download
+    fetch(url)
+      .then(res => {
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
+        return res.blob();    // wait for full zip to arrive
+      })
+      .then(blob => {
+        // Trigger browser download
+        const a   = document.createElement('a');
+        a.href    = URL.createObjectURL(blob);
+        a.download = `${ligandId}_structures.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+      })
+      .catch(err => {
+        alert(`Download failed: ${err.message}`);
+      })
+      .finally(() => {
+        // Hide progress overlay
+        document.getElementById('progress-overlay').classList.remove('active');
+      });
+  }
+
+  // ── Enter key on inputs ──────────────────────────────────────
+  ['f-organism', 'f-keyword'].forEach(id => {
     document.getElementById(id).addEventListener('keydown', e => {
       if (e.key === 'Enter') loadProteins(true);
     });
