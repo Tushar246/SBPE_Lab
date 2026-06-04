@@ -2,6 +2,7 @@ const express  = require("express");
 const axios    = require("axios");
 const path     = require("path");
 const archiver = require("archiver");
+const { cifToPdb } = require("./cifToPdb");
 
 const app  = express();
 const PORT = 3000;
@@ -19,21 +20,22 @@ app.get("/", (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────
-// HELPER: fetch ONE file as buffer with retry
-// Returns Buffer on success, null after all retries fail
+// HELPER: fetch CIF for one entry from ModelServer, with retry
+// Uses assembly endpoint: models.rcsb.org/v1/{id}/assembly?name=1&encoding=cif
+// Returns CIF string on success, null after all retries fail
 // ─────────────────────────────────────────────────────────────
-async function fetchFileBuffer(pdbId, retries = 3) {
-    const url = `https://files.rcsb.org/download/${pdbId}.pdb1.gz`;
+async function fetchCif(pdbId, retries = 3) {
+    const url = `https://models.rcsb.org/v1/${pdbId.toLowerCase()}/assembly?name=1&encoding=cif&copy_all_categories=false&download=false`;
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             const res = await axios.get(url, {
-                responseType: "arraybuffer", // get as buffer, not stream
-                timeout: 45000
+                responseType: "text",
+                timeout: 60000
             });
-            return Buffer.from(res.data);
+            return res.data;
         } catch (err) {
-            console.log(`  ${pdbId} attempt ${attempt}/${retries}: ${err.message}`);
-            if (attempt < retries) await new Promise(r => setTimeout(r, 1000));
+            console.log(`  ${pdbId} CIF attempt ${attempt}/${retries}: ${err.message}`);
+            if (attempt < retries) await new Promise(r => setTimeout(r, 1000 * attempt));
         }
     }
     return null;
@@ -207,9 +209,7 @@ app.get("/metabolite/:id/download/ids", async (req, res) => {
             return res.status(404).json({ error: "No results found" });
         }
 
-        const content = [
-            ...ids
-        ].join("\n");
+        const content = ids.join("\n");
 
         res.setHeader("Content-Type", "text/plain");
         res.setHeader("Content-Disposition", `attachment; filename="${ligandId}_pdb_ids.txt"`);
@@ -224,11 +224,15 @@ app.get("/metabolite/:id/download/ids", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // GET /metabolite/:id/download/structures
-// Downloads ALL .pdb structure files packed into a zip
 //
-// FIX 1: use arraybuffer not stream — stream+archiver = race condition = 500
-// FIX 2: batches of 5 with retry per file — prevents RCSB rate limit errors
-// FIX 3: delay between batches — polite to RCSB servers
+// For each PDB entry:
+//   1. Fetch assembly CIF from ModelServer (models.rcsb.org)
+//   2. Parse _atom_site loop
+//   3. Keep only: chain A | ATOM records | no water | no ions | no HETATM
+//   4. Write as PDB-format text
+//   5. Pack all .pdb files into a single zip
+//
+// Batches of 5 with retry + 300 ms inter-batch delay to respect rate limits
 // ─────────────────────────────────────────────────────────────
 app.get("/metabolite/:id/download/structures", async (req, res) => {
     try {
@@ -244,72 +248,78 @@ app.get("/metabolite/:id/download/structures", async (req, res) => {
             return res.status(404).json({ error: "No results found with these filters." });
         }
 
-        console.log(`Found ${total} structures. Building zip...`);
+        console.log(`Found ${total} structures. Fetching CIFs and building zip...`);
 
-        // Send headers first — browser knows a zip is coming
         res.setHeader("Content-Type", "application/zip");
-        res.setHeader("Content-Disposition", `attachment; filename="${ligandId}_structures.zip"`);
+        res.setHeader("Content-Disposition", `attachment; filename="${ligandId}_chainA_structures.zip"`);
         res.setHeader("Transfer-Encoding", "chunked");
 
         const archive = archiver("zip", { zlib: { level: 1 } });
-
-        archive.on("error",   err => console.log("Archiver error:", err.message));
+        archive.on("error",   err => console.log("Archiver error:",   err.message));
         archive.on("warning", err => console.log("Archiver warning:", err.message));
-
         archive.pipe(res);
 
-
-
-        // Download files in batches of 5 with retry
         const BATCH_SIZE = 5;
         let   done       = 0;
         const failed     = [];
+        const skipped    = [];   // entries where chain A had 0 atoms after filtering
 
         for (let i = 0; i < ids.length; i += BATCH_SIZE) {
             const batch = ids.slice(i, i + BATCH_SIZE);
 
-            // Fetch this batch in parallel
             const results = await Promise.all(
                 batch.map(async (pdbId) => {
-                    const buf = await fetchFileBuffer(pdbId, 3); // 3 retries
-                    return { pdbId, buf };
+                    const cifText = await fetchCif(pdbId, 3);
+                    return { pdbId, cifText };
                 })
             );
 
-            // Append each fetched buffer to zip
-            for (const { pdbId, buf } of results) {
-                if (buf) {
-                    // FIX 1: append buffer directly — no stream race condition
-                    archive.append(buf, { name: `${pdbId}.pdb1.gz` });
-                    done++;
-                    console.log(`[${done}/${total}] ${pdbId}.pdb1.gz added to zip.`);
-                } else {
+            for (const { pdbId, cifText } of results) {
+                if (!cifText) {
                     failed.push(pdbId);
                     archive.append(
-                        Buffer.from(`Could not download after 3 attempts.`),
+                        Buffer.from(`Could not download CIF after 3 attempts.`),
                         { name: `${pdbId}_FAILED.txt` }
                     );
-                    console.log(`[FAILED] ${pdbId}`);
+                    console.log(`[FAILED]   ${pdbId}`);
+                    continue;
                 }
+
+                const pdbText = cifToPdb(cifText, pdbId);
+
+                if (!pdbText) {
+                    skipped.push(pdbId);
+                    console.log(`[SKIPPED]  ${pdbId} – no chain-A protein atoms found`);
+                    continue;
+                }
+
+                archive.append(Buffer.from(pdbText), { name: `${pdbId}_chainA.pdb` });
+                done++;
+                console.log(`[${done}/${total}] ${pdbId}_chainA.pdb added`);
             }
 
-            // FIX 3: small delay between batches — avoid rate limiting
+            // Polite delay between batches
             if (i + BATCH_SIZE < ids.length) {
                 await new Promise(r => setTimeout(r, 300));
             }
         }
 
-        // Add failed list if any files couldn't be downloaded
+        // Summary files
         if (failed.length > 0) {
             archive.append(
-                Buffer.from(`These ${failed.length} files failed:\n${failed.join("\n")}`),
+                Buffer.from(`These ${failed.length} entries could not be downloaded:\n${failed.join("\n")}`),
                 { name: "FAILED_DOWNLOADS.txt" }
             );
         }
+        if (skipped.length > 0) {
+            archive.append(
+                Buffer.from(`These ${skipped.length} entries had no chain-A protein atoms:\n${skipped.join("\n")}`),
+                { name: "SKIPPED_NO_CHAIN_A.txt" }
+            );
+        }
 
-        // Close the zip — sends remaining data to browser
         await archive.finalize();
-        console.log(`Done. ${done} succeeded, ${failed.length} failed.`);
+        console.log(`Done. ${done} PDB files written, ${failed.length} failed, ${skipped.length} skipped.`);
 
     } catch (error) {
         console.log("Download structures error:", error.message);
