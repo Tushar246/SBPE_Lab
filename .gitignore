@@ -1,2 +1,38 @@
+# ── Node.js ──────────────────────────────────────────────────
+# Never commit node_modules — it's huge and rebuilt from package.json
 node_modules/
-package-lock.json
+
+# npm debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Environment / Secrets ─────────────────────────────────────
+# Never commit API keys or passwords
+.env
+.env.*
+.env.local
+.env.development
+.env.production
+
+# ── OS generated files ────────────────────────────────────────
+.DS_Store           # macOS folder metadata
+.DS_Store?
+Thumbs.db           # Windows thumbnail cache
+desktop.ini
+
+# ── Editor folders ────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp               # vim swap files
+*.swo
+
+# ── Logs ──────────────────────────────────────────────────────
+logs/
+*.log
+
+# ── Build / temp files ────────────────────────────────────────
+dist/
+build/
+tmp/
+temp/

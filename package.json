@@ -1,15 +1,21 @@
 {
   "name": "pdb-metabolite-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "RCSB PDB Metabolite Explorer — fetch metabolite data, protein structures, and 3D coordinates from the Protein Data Bank",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "rcsb",
+    "pdb",
+    "metabolite",
+    "protein",
+    "bioinformatics"
+  ],
+  "author": "Tushar yadav",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {

@@ -1,0 +1,22 @@
+# Dependencies — reinstalled fresh inside container
+node_modules
+
+# Git files — not needed inside container
+.git
+.gitignore
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor folders
+.vscode
+.idea
+
+# Env files — never put secrets inside a Docker image
+.env
+.env.*
