@@ -141,7 +141,7 @@
   <a href="index.html" class="nav-logo">Mol<span>Explorer</span></a>
   <ul>
     <li><a href="index.html">Home</a></li>
-    <li><a href="search.html">Search</a></li>
+    <li><a href="gene.html">Search</a></li>
     <li><a href="https://www.rcsb.org" target="_blank">RCSB PDB ↗</a></li>
   </ul>
 </nav>
@@ -177,11 +177,19 @@
   <div class="filters">
     <div class="filter-group">
       <label>Organism</label>
-      <input type="text" id="f-organism" placeholder="e.g. Homo sapiens" />
+      <input type="text" id="f-organism" list="organism-list" placeholder="Type organism name..." />
+      <datalist id="organism-list">
+        <option value="Homo sapiens">
+        <option value="Mus musculus">
+        <option value="Rattus norvegicus">
+        <option value="Escherichia coli">
+        <option value="Saccharomyces cerevisiae">
+        <option value="Arabidopsis thaliana">
+      </datalist>
     </div>
     <div class="filter-group">
       <label>Keyword</label>
-      <input type="text" id="f-keyword" placeholder="e.g. kinase, receptor" />
+      <input type="text" id="f-keyword"  placeholder="e.g. kinase, receptor" />
     </div>
     <div class="filter-group">
       <label>Experiment Method</label>

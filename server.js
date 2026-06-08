@@ -21,17 +21,12 @@ app.get("/", (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // HELPER: fetch CIF for one entry from ModelServer, with retry
-// Uses assembly endpoint: models.rcsb.org/v1/{id}/assembly?name=1&encoding=cif
-// Returns CIF string on success, null after all retries fail
 // ─────────────────────────────────────────────────────────────
 async function fetchCif(pdbId, retries = 3) {
-    const url = `https://models.rcsb.org/v1/${pdbId.toLowerCase()}/assembly?name=1&encoding=cif&copy_all_categories=false&download=false`;
+    const url = `https://models.rcsb.org/v1/${pdbId.toLowerCase()}/full?encoding=cif&copy_all_categories=false&download=false`;
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            const res = await axios.get(url, {
-                responseType: "text",
-                timeout: 60000
-            });
+            const res = await axios.get(url, { responseType: "text", timeout: 60000 });
             return res.data;
         } catch (err) {
             console.log(`  ${pdbId} CIF attempt ${attempt}/${retries}: ${err.message}`);
@@ -43,8 +38,73 @@ async function fetchCif(pdbId, retries = 3) {
 
 
 // ─────────────────────────────────────────────────────────────
-// HELPER: fetch ALL pdb ids for a ligand with given filters
-// Loops in batches of 1000 until every id is collected
+// HELPER: build a zip of .pdb files from a list of PDB IDs
+// Shared by both ligand and gene download routes
+// ─────────────────────────────────────────────────────────────
+async function streamStructuresZip(res, ids, total, zipFilename) {
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${zipFilename}"`);
+    res.setHeader("Transfer-Encoding", "chunked");
+
+    const archive = archiver("zip", { zlib: { level: 1 } });
+    archive.on("error",   err => console.log("Archiver error:",   err.message));
+    archive.on("warning", err => console.log("Archiver warning:", err.message));
+    archive.pipe(res);
+
+    const BATCH_SIZE = 5;
+    let   done       = 0;
+    const failed     = [];
+    const skipped    = [];
+
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const batch = ids.slice(i, i + BATCH_SIZE);
+
+        const results = await Promise.all(
+            batch.map(async (pdbId) => {
+                const cifText = await fetchCif(pdbId, 3);
+                return { pdbId, cifText };
+            })
+        );
+
+        for (const { pdbId, cifText } of results) {
+            if (!cifText) {
+                failed.push(pdbId);
+                archive.append(Buffer.from(`Could not download CIF after 3 attempts.`), { name: `${pdbId}_FAILED.txt` });
+                console.log(`[FAILED]   ${pdbId}`);
+                continue;
+            }
+
+            const pdbText = cifToPdb(cifText, pdbId);
+
+            if (!pdbText) {
+                skipped.push(pdbId);
+                console.log(`[SKIPPED]  ${pdbId} – no chain-A protein atoms found`);
+                continue;
+            }
+
+            archive.append(Buffer.from(pdbText), { name: `${pdbId}_chainA.pdb` });
+            done++;
+            console.log(`[${done}/${total}] ${pdbId}_chainA.pdb`);
+        }
+
+        if (i + BATCH_SIZE < ids.length) await new Promise(r => setTimeout(r, 300));
+    }
+
+    if (failed.length > 0) {
+        archive.append(Buffer.from(`Failed (${failed.length}):\n${failed.join("\n")}`), { name: "FAILED_DOWNLOADS.txt" });
+    }
+    if (skipped.length > 0) {
+        archive.append(Buffer.from(`Skipped (${skipped.length}):\n${skipped.join("\n")}`), { name: "SKIPPED_NO_CHAIN_A.txt" });
+    }
+
+    await archive.finalize();
+    console.log(`Done. ${done} written, ${failed.length} failed, ${skipped.length} skipped.`);
+}
+
+
+// ─────────────────────────────────────────────────────────────
+// HELPER: fetch ALL pdb ids — LIGAND SEARCH
+// Finds proteins that physically contain the ligand
 // ─────────────────────────────────────────────────────────────
 async function fetchAllPdbIds(ligandId, { organism, keyword, experimentMethod } = {}) {
     const BATCH = 1000;
@@ -101,6 +161,95 @@ async function fetchAllPdbIds(ligandId, { organism, keyword, experimentMethod } 
 
 
 // ─────────────────────────────────────────────────────────────
+// HELPER: fetch ALL pdb ids — GENE SEARCH
+// Finds protein structures that come from a specific gene
+// gene name is case-sensitive (TP53 ≠ tp53)
+// ─────────────────────────────────────────────────────────────
+async function fetchAllPdbIdsByGene(geneName, { organism, experimentMethod } = {}) {
+    const BATCH = 1000;
+    let start   = 0;
+    let total   = null;
+    let allIds  = [];
+
+    while (true) {
+        const request_options = {
+            paginate: { start, rows: BATCH },
+            results_content_type: ["experimental"],
+            sort: [{ sort_by: "score", direction: "desc" }],
+            scoring_strategy: "combined"
+        };
+
+        // Gene name node — searches the official gene name field
+        // case_sensitive: true because TP53 (human) ≠ Tp53 (mouse)
+        const geneNode = {
+            type: "terminal", service: "text",
+            parameters: {
+                attribute:      "rcsb_entity_source_organism.rcsb_gene_name.value",
+                operator:       "exact_match",
+                value:          geneName.toUpperCase(),
+                case_sensitive: true
+            }
+        };
+
+        // Protein type filter — always present
+        const proteinNode = {
+            type: "terminal", service: "text",
+            parameters: { attribute: "entity_poly.rcsb_entity_polymer_type", operator: "exact_match", value: "Protein" }
+        };
+
+        const organismNode   = organism         ? { type: "terminal", service: "text", parameters: { attribute: "rcsb_entity_source_organism.ncbi_scientific_name", operator: "exact_match", value: organism } } : null;
+        const experimentNode = experimentMethod ? { type: "terminal", service: "text", parameters: { attribute: "exptl.method", operator: "exact_match", value: experimentMethod.toUpperCase() } } : null;
+
+        // Build query — always gene + protein
+        // If organism or experiment method present → wrap in __refinements__
+        let queryNode;
+
+        if (!organism && !experimentMethod) {
+            // Simple case: gene + protein only
+            queryNode = {
+                type: "group", logical_operator: "and", label: "text",
+                nodes: [geneNode, proteinNode]
+            };
+        } else {
+            // With refinements
+            const refNodes = [proteinNode];
+            if (organismNode)   refNodes.push(organismNode);
+            if (experimentNode) refNodes.push(experimentNode);
+
+            queryNode = {
+                type: "group", logical_operator: "and", label: "text",
+                nodes: [
+                    geneNode,
+                    { type: "group", label: "__refinements__", logical_operator: "and", nodes: refNodes }
+                ]
+            };
+        }
+
+        const response = await axios.post(
+            "https://search.rcsb.org/rcsbsearch/v2/query",
+            { query: queryNode, return_type: "entry", request_options },
+            { headers: { "Content-Type": "application/json" } }
+        );
+
+        if (response.status === 204) break;
+        if (total === null) total = response.data.total_count || 0;
+
+        const batch = (response.data.result_set || []).map(item => item.identifier);
+        allIds = [...allIds, ...batch];
+
+        if (allIds.length >= total || batch.length === 0) break;
+        start += BATCH;
+    }
+
+    return { ids: allIds, total: total || allIds.length };
+}
+
+
+// ═════════════════════════════════════════════════════════════
+//  LIGAND ROUTES (existing)
+// ═════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────
 // GET /metabolite/:id
 // ─────────────────────────────────────────────────────────────
 app.get("/metabolite/:id", async (req, res) => {
@@ -122,7 +271,7 @@ app.get("/metabolite/:id", async (req, res) => {
 
 
 // ─────────────────────────────────────────────────────────────
-// GET /metabolite/:id/proteins  (paginated, for the UI)
+// GET /metabolite/:id/proteins  (paginated UI)
 // ─────────────────────────────────────────────────────────────
 app.get("/metabolite/:id/proteins", async (req, res) => {
     try {
@@ -140,11 +289,11 @@ app.get("/metabolite/:id/proteins", async (req, res) => {
             scoring_strategy: "combined"
         };
 
-        const proteinNode    = { type: "terminal", service: "text",      parameters: { attribute: "entity_poly.rcsb_entity_polymer_type", operator: "exact_match", value: "Protein" } };
-        const ligandNode     = { type: "terminal", service: "full_text", parameters: { value: ligandId } };
-        const keywordNode    = keyword          ? { type: "terminal", service: "full_text", parameters: { value: keyword } } : null;
-        const orgNode        = organism         ? { type: "terminal", service: "text", parameters: { attribute: "rcsb_entity_source_organism.ncbi_scientific_name", operator: "exact_match", value: organism } } : null;
-        const expNode        = experimentMethod ? { type: "terminal", service: "text", parameters: { attribute: "exptl.method", operator: "exact_match", value: experimentMethod.toUpperCase() } } : null;
+        const proteinNode = { type: "terminal", service: "text",      parameters: { attribute: "entity_poly.rcsb_entity_polymer_type", operator: "exact_match", value: "Protein" } };
+        const ligandNode  = { type: "terminal", service: "full_text", parameters: { value: ligandId } };
+        const keywordNode = keyword          ? { type: "terminal", service: "full_text", parameters: { value: keyword } } : null;
+        const orgNode     = organism         ? { type: "terminal", service: "text", parameters: { attribute: "rcsb_entity_source_organism.ncbi_scientific_name", operator: "exact_match", value: organism } } : null;
+        const expNode     = experimentMethod ? { type: "terminal", service: "text", parameters: { attribute: "exptl.method", operator: "exact_match", value: experimentMethod.toUpperCase() } } : null;
 
         let queryNode;
         if (!organism && !experimentMethod) {
@@ -166,12 +315,9 @@ app.get("/metabolite/:id/proteins", async (req, res) => {
             { headers: { "Content-Type": "application/json" } }
         );
 
-        if (response.status === 204) {
-            return res.json({ ligand: ligandId, filters: { organism, keyword, experimentMethod, limit }, totalAvailable: 0, totalReturned: 0, proteins: [] });
-        }
+        if (response.status === 204) return res.json({ ligand: ligandId, filters: { organism, keyword, experimentMethod, limit }, totalAvailable: 0, totalReturned: 0, proteins: [] });
 
         const totalCount = response.data.total_count;
-
         if (!response.data.result_set || response.data.result_set.length === 0) {
             return res.json({ ligand: ligandId, filters: { organism, keyword, experimentMethod, limit }, totalAvailable: totalCount || 0, totalReturned: 0, proteins: [] });
         }
@@ -193,7 +339,6 @@ app.get("/metabolite/:id/proteins", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────
 // GET /metabolite/:id/download/ids
-// Returns a .txt file with ALL pdb ids, one per line
 // ─────────────────────────────────────────────────────────────
 app.get("/metabolite/:id/download/ids", async (req, res) => {
     try {
@@ -202,14 +347,18 @@ app.get("/metabolite/:id/download/ids", async (req, res) => {
         const keyword          = req.query.keyword          || null;
         const experimentMethod = req.query.experimentMethod || null;
 
-        console.log(`Fetching ALL ids for ${ligandId}...`);
+        console.log(`[LIGAND] Fetching ALL ids for ${ligandId}...`);
         const { ids, total } = await fetchAllPdbIds(ligandId, { organism, keyword, experimentMethod });
 
-        if (ids.length === 0) {
-            return res.status(404).json({ error: "No results found" });
-        }
+        if (ids.length === 0) return res.status(404).send("No results found.");
 
-        const content = ids.join("\n");
+        const content = [
+            `# PDB IDs — Ligand: ${ligandId}`,
+            `# Total: ${total}`,
+            `# Filters: organism=${organism||"any"} | keyword=${keyword||"any"} | method=${experimentMethod||"any"}`,
+            `# Generated: ${new Date().toISOString()}`,
+            ``, ...ids
+        ].join("\n");
 
         res.setHeader("Content-Type", "text/plain");
         res.setHeader("Content-Disposition", `attachment; filename="${ligandId}_pdb_ids.txt"`);
@@ -217,22 +366,13 @@ app.get("/metabolite/:id/download/ids", async (req, res) => {
 
     } catch (error) {
         console.log("Download IDs error:", error.message);
-        res.status(500).json({ error: "Failed to fetch IDs", details: error.message });
+        if (!res.headersSent) res.status(500).send("Failed: " + error.message);
     }
 });
 
 
 // ─────────────────────────────────────────────────────────────
 // GET /metabolite/:id/download/structures
-//
-// For each PDB entry:
-//   1. Fetch assembly CIF from ModelServer (models.rcsb.org)
-//   2. Parse _atom_site loop
-//   3. Keep only: chain A | ATOM records | no water | no ions | no HETATM
-//   4. Write as PDB-format text
-//   5. Pack all .pdb files into a single zip
-//
-// Batches of 5 with retry + 300 ms inter-batch delay to respect rate limits
 // ─────────────────────────────────────────────────────────────
 app.get("/metabolite/:id/download/structures", async (req, res) => {
     try {
@@ -241,98 +381,166 @@ app.get("/metabolite/:id/download/structures", async (req, res) => {
         const keyword          = req.query.keyword          || null;
         const experimentMethod = req.query.experimentMethod || null;
 
-        console.log(`Fetching ALL ids for ${ligandId}...`);
+        console.log(`[LIGAND] Fetching ALL ids for ${ligandId}...`);
         const { ids, total } = await fetchAllPdbIds(ligandId, { organism, keyword, experimentMethod });
 
-        if (ids.length === 0) {
-            return res.status(404).json({ error: "No results found with these filters." });
-        }
+        if (ids.length === 0) return res.status(404).send("No results found.");
 
-        console.log(`Found ${total} structures. Fetching CIFs and building zip...`);
-
-        res.setHeader("Content-Type", "application/zip");
-        res.setHeader("Content-Disposition", `attachment; filename="${ligandId}_chainA_structures.zip"`);
-        res.setHeader("Transfer-Encoding", "chunked");
-
-        const archive = archiver("zip", { zlib: { level: 1 } });
-        archive.on("error",   err => console.log("Archiver error:",   err.message));
-        archive.on("warning", err => console.log("Archiver warning:", err.message));
-        archive.pipe(res);
-
-        const BATCH_SIZE = 5;
-        let   done       = 0;
-        const failed     = [];
-        const skipped    = [];   // entries where chain A had 0 atoms after filtering
-
-        for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-            const batch = ids.slice(i, i + BATCH_SIZE);
-
-            const results = await Promise.all(
-                batch.map(async (pdbId) => {
-                    const cifText = await fetchCif(pdbId, 3);
-                    return { pdbId, cifText };
-                })
-            );
-
-            for (const { pdbId, cifText } of results) {
-                if (!cifText) {
-                    failed.push(pdbId);
-                    archive.append(
-                        Buffer.from(`Could not download CIF after 3 attempts.`),
-                        { name: `${pdbId}_FAILED.txt` }
-                    );
-                    console.log(`[FAILED]   ${pdbId}`);
-                    continue;
-                }
-
-                const pdbText = cifToPdb(cifText, pdbId);
-
-                if (!pdbText) {
-                    skipped.push(pdbId);
-                    console.log(`[SKIPPED]  ${pdbId} – no chain-A protein atoms found`);
-                    continue;
-                }
-
-                archive.append(Buffer.from(pdbText), { name: `${pdbId}_chainA.pdb` });
-                done++;
-                console.log(`[${done}/${total}] ${pdbId}_chainA.pdb added`);
-            }
-
-            // Polite delay between batches
-            if (i + BATCH_SIZE < ids.length) {
-                await new Promise(r => setTimeout(r, 300));
-            }
-        }
-
-        // Summary files
-        if (failed.length > 0) {
-            archive.append(
-                Buffer.from(`These ${failed.length} entries could not be downloaded:\n${failed.join("\n")}`),
-                { name: "FAILED_DOWNLOADS.txt" }
-            );
-        }
-        if (skipped.length > 0) {
-            archive.append(
-                Buffer.from(`These ${skipped.length} entries had no chain-A protein atoms:\n${skipped.join("\n")}`),
-                { name: "SKIPPED_NO_CHAIN_A.txt" }
-            );
-        }
-
-        await archive.finalize();
-        console.log(`Done. ${done} PDB files written, ${failed.length} failed, ${skipped.length} skipped.`);
+        console.log(`[LIGAND] ${total} structures. Building zip...`);
+        await streamStructuresZip(res, ids, total, `${ligandId}_structures.zip`);
 
     } catch (error) {
         console.log("Download structures error:", error.message);
-        if (!res.headersSent) {
-            res.status(500).json({ error: "Failed to create zip", details: error.message });
+        if (!res.headersSent) res.status(500).send("Failed: " + error.message);
+    }
+});
+
+
+// ═════════════════════════════════════════════════════════════
+//  GENE ROUTES (new)
+// ═════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────
+// GET /gene/:name/proteins  (paginated UI)
+// Search proteins by gene name e.g. /gene/TP53/proteins
+//
+// Filters:
+//   ?organism=Homo sapiens
+//   ?experimentMethod=X-RAY DIFFRACTION
+//   ?limit=25&start=0
+// ─────────────────────────────────────────────────────────────
+app.get("/gene/:name/proteins", async (req, res) => {
+    try {
+        const geneName         = req.params.name.toUpperCase();
+        const limit            = parseInt(req.query.limit)   || 25;
+        const start            = parseInt(req.query.start)   || 0;
+        const organism         = req.query.organism          || null;
+        const experimentMethod = req.query.experimentMethod  || null;
+
+        const request_options = {
+            paginate: { start, rows: limit },
+            results_content_type: ["experimental"],
+            sort: [{ sort_by: "score", direction: "desc" }],
+            scoring_strategy: "combined"
+        };
+
+        const geneNode = {
+            type: "terminal", service: "text",
+            parameters: {
+                attribute:      "rcsb_entity_source_organism.rcsb_gene_name.value",
+                operator:       "exact_match",
+                value:          geneName,
+                case_sensitive: true
+            }
+        };
+
+        const proteinNode    = { type: "terminal", service: "text", parameters: { attribute: "entity_poly.rcsb_entity_polymer_type", operator: "exact_match", value: "Protein" } };
+        const orgNode        = organism         ? { type: "terminal", service: "text", parameters: { attribute: "rcsb_entity_source_organism.ncbi_scientific_name", operator: "exact_match", value: organism } } : null;
+        const expNode        = experimentMethod ? { type: "terminal", service: "text", parameters: { attribute: "exptl.method", operator: "exact_match", value: experimentMethod.toUpperCase() } } : null;
+
+        let queryNode;
+        if (!organism && !experimentMethod) {
+            queryNode = { type: "group", logical_operator: "and", label: "text", nodes: [geneNode, proteinNode] };
+        } else {
+            const refNodes = [proteinNode];
+            if (orgNode) refNodes.push(orgNode);
+            if (expNode) refNodes.push(expNode);
+            queryNode = {
+                type: "group", logical_operator: "and", label: "text",
+                nodes: [geneNode, { type: "group", label: "__refinements__", logical_operator: "and", nodes: refNodes }]
+            };
         }
+
+        const response = await axios.post(
+            "https://search.rcsb.org/rcsbsearch/v2/query",
+            { query: queryNode, return_type: "entry", request_options },
+            { headers: { "Content-Type": "application/json" } }
+        );
+
+        if (response.status === 204) return res.json({ gene: geneName, filters: { organism, experimentMethod, limit }, totalAvailable: 0, totalReturned: 0, proteins: [] });
+
+        const totalCount = response.data.total_count;
+        if (!response.data.result_set || response.data.result_set.length === 0) {
+            return res.json({ gene: geneName, filters: { organism, experimentMethod, limit }, totalAvailable: totalCount || 0, totalReturned: 0, proteins: [] });
+        }
+
+        const proteins = response.data.result_set.map(item => {
+            const pdbId = item.identifier;
+            return { pdbId, image: `https://cdn.rcsb.org/images/structures/${pdbId.toLowerCase()}_assembly-1.jpeg`, rcsbLink: `https://www.rcsb.org/structure/${pdbId}` };
+        });
+
+        res.json({ gene: geneName, filters: { organism, experimentMethod, limit }, totalAvailable: totalCount, totalReturned: proteins.length, proteins });
+
+    } catch (error) {
+        console.log("Gene search error:", error.response?.status, JSON.stringify(error.response?.data, null, 2));
+        res.status(500).json({ error: "Gene search failed", details: error.response?.data });
     }
 });
 
 
 // ─────────────────────────────────────────────────────────────
-// GET /search
+// GET /gene/:name/download/ids
+// Download ALL pdb ids for a gene as .txt
 // ─────────────────────────────────────────────────────────────
+app.get("/gene/:name/download/ids", async (req, res) => {
+    try {
+        const geneName         = req.params.name.toUpperCase();
+        const organism         = req.query.organism         || null;
+        const experimentMethod = req.query.experimentMethod || null;
+
+        console.log(`[GENE] Fetching ALL ids for gene ${geneName}...`);
+        const { ids, total } = await fetchAllPdbIdsByGene(geneName, { organism, experimentMethod });
+
+        if (ids.length === 0) return res.status(404).send("No results found.");
+
+        const content = [
+            `# PDB IDs — Gene: ${geneName}`,
+            `# Total: ${total}`,
+            `# Filters: organism=${organism||"any"} | method=${experimentMethod||"any"}`,
+            `# Generated: ${new Date().toISOString()}`,
+            ``, ...ids
+        ].join("\n");
+
+        res.setHeader("Content-Type", "text/plain");
+        res.setHeader("Content-Disposition", `attachment; filename="${geneName}_pdb_ids.txt"`);
+        res.send(content);
+
+    } catch (error) {
+        console.log("Gene download IDs error:", error.message);
+        if (!res.headersSent) res.status(500).send("Failed: " + error.message);
+    }
+});
+
+
+// ─────────────────────────────────────────────────────────────
+// GET /gene/:name/download/structures
+// Download ALL structure files for a gene as zip
+// ─────────────────────────────────────────────────────────────
+app.get("/gene/:name/download/structures", async (req, res) => {
+    try {
+        const geneName         = req.params.name.toUpperCase();
+        const organism         = req.query.organism         || null;
+        const experimentMethod = req.query.experimentMethod || null;
+
+        console.log(`[GENE] Fetching ALL ids for gene ${geneName}...`);
+        const { ids, total } = await fetchAllPdbIdsByGene(geneName, { organism, experimentMethod });
+
+        if (ids.length === 0) return res.status(404).send("No results found.");
+
+        console.log(`[GENE] ${total} structures. Building zip...`);
+        await streamStructuresZip(res, ids, total, `${geneName}_structures.zip`);
+
+    } catch (error) {
+        console.log("Gene download structures error:", error.message);
+        if (!res.headersSent) res.status(500).send("Failed: " + error.message);
+    }
+});
+
+
+// ═════════════════════════════════════════════════════════════
+//  GENERAL SEARCH + METABOLITE SDF
+// ═════════════════════════════════════════════════════════════
+
 app.get("/search", async (req, res) => {
     try {
         const keyword  = req.query.keyword  || null;
@@ -341,9 +549,7 @@ app.get("/search", async (req, res) => {
         const limit    = parseInt(req.query.limit) || 25;
         const start    = parseInt(req.query.start) || 0;
 
-        if (!keyword) {
-            return res.status(400).json({ error: "Please provide a keyword." });
-        }
+        if (!keyword) return res.status(400).json({ error: "Please provide a keyword." });
 
         let keywordCondition;
         if (field === "full_text") {
@@ -359,9 +565,7 @@ app.get("/search", async (req, res) => {
         }
 
         const conditions = [keywordCondition];
-        if (organism) {
-            conditions.push({ type: "terminal", service: "text", parameters: { attribute: "rcsb_entity_source_organism.taxonomy_lineage.name", operator: "exact_match", value: organism } });
-        }
+        if (organism) conditions.push({ type: "terminal", service: "text", parameters: { attribute: "rcsb_entity_source_organism.taxonomy_lineage.name", operator: "exact_match", value: organism } });
 
         const query = {
             query: conditions.length === 1 ? conditions[0] : { type: "group", logical_operator: "and", nodes: conditions },
@@ -369,17 +573,12 @@ app.get("/search", async (req, res) => {
             request_options: { paginate: { start, rows: limit } }
         };
 
-        const response = await axios.post(
-            "https://search.rcsb.org/rcsbsearch/v2/query", query,
-            { headers: { "Content-Type": "application/json" } }
-        );
+        const response = await axios.post("https://search.rcsb.org/rcsbsearch/v2/query", query, { headers: { "Content-Type": "application/json" } });
 
         if (response.status === 204) return res.json({ keyword, field, organism, totalAvailable: 0, results: [] });
 
         const totalCount = response.data.total_count;
-        if (!response.data.result_set || response.data.result_set.length === 0) {
-            return res.json({ keyword, field, organism, totalAvailable: 0, results: [] });
-        }
+        if (!response.data.result_set || response.data.result_set.length === 0) return res.json({ keyword, field, organism, totalAvailable: 0, results: [] });
 
         const results = response.data.result_set.map(item => {
             const pdbId = item.identifier;
@@ -395,9 +594,6 @@ app.get("/search", async (req, res) => {
 });
 
 
-// ─────────────────────────────────────────────────────────────
-// GET /metabolite/:id/structure  (single metabolite SDF)
-// ─────────────────────────────────────────────────────────────
 app.get("/metabolite/:id/structure", async (req, res) => {
     try {
         const ligandId = req.params.id.toUpperCase();
