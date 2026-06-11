@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Explorer — PDBextractor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#070d0a;--bg2:#0e1812;--bg3:#162019;--bg4:#1e2e22;
+  --border:rgba(56,210,110,0.12);--borderB:rgba(56,210,110,0.32);
+  --green:#38d26e;--gdim:rgba(56,210,110,0.07);--gbright:rgba(56,210,110,0.18);
+  --text:#dff0e6;--dim:#5f9171;--muted:#254833;
+  --blue:#4eb8e8;--yellow:#e8c84e;--red:#e87070;
+  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(56,210,110,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(56,210,110,0.025) 1px,transparent 1px);background-size:52px 52px;pointer-events:none;z-index:0}
+
+/* nav */
+nav{position:sticky;top:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:.9rem 2rem;background:rgba(7,13,10,.88);backdrop-filter:blur(14px);border-bottom:1px solid var(--border)}
+.nav-logo{font-size:1rem;font-weight:800;letter-spacing:.04em;color:var(--green);text-decoration:none}
+.nav-logo span{color:var(--dim);font-weight:400}
+nav ul{list-style:none;display:flex;gap:1.8rem}
+nav a{font-family:var(--mono);font-size:.72rem;color:var(--dim);text-decoration:none;letter-spacing:.05em;transition:color .2s}
+nav a:hover,nav a.active{color:var(--green)}
+
+/* ── page ── */
+.page{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:2.5rem 2rem 6rem}
+
+/* ── search hero ── */
+.search-hero{text-align:center;padding:3rem 0 2.5rem}
+.sh-label{font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;color:var(--green);text-transform:uppercase;margin-bottom:.8rem;display:block}
+.sh-title{font-size:clamp(1.8rem,4vw,3rem);font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-bottom:.6rem}
+.sh-sub{font-family:var(--mono);font-size:.78rem;color:var(--dim);margin-bottom:2rem}
+
+/* search box */
+.search-box{max-width:700px;margin:0 auto;position:relative}
+.search-input-wrap{display:flex;background:var(--bg2);border:1px solid var(--borderB);border-radius:4px;overflow:hidden;transition:box-shadow .2s}
+.search-input-wrap:focus-within{box-shadow:0 0 0 3px rgba(56,210,110,.12)}
+#main-search{flex:1;background:transparent;border:none;color:var(--text);font-family:var(--mono);font-size:.95rem;padding:1rem 1.2rem;outline:none;letter-spacing:.04em}
+#main-search::placeholder{color:var(--muted)}
+.btn-go{background:var(--green);color:#070d0a;border:none;font-family:var(--mono);font-size:.78rem;font-weight:500;letter-spacing:.08em;padding:0 1.8rem;cursor:pointer;transition:opacity .2s;white-space:nowrap}
+.btn-go:hover{opacity:.85}
+
+/* filter row below search */
+.filter-strip{display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap;margin-top:1rem}
+.fsel-wrap{position:relative}
+.fsel-wrap::after{content:'▾';position:absolute;right:.7rem;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none;font-size:.68rem}
+.ftext{background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:.72rem;padding:.45rem .8rem;border-radius:3px;outline:none;min-width:200px;transition:border-color .2s}
+.ftext::placeholder{color:var(--muted)}
+.ftext:focus{border-color:var(--green)}
+.fsel{background:var(--bg2);border:1px solid var(--border);color:var(--dim);font-family:var(--mono);font-size:.72rem;padding:.45rem 2rem .45rem .8rem;border-radius:3px;outline:none;appearance:none;-webkit-appearance:none;cursor:pointer;transition:border-color .2s}
+.fsel:focus{border-color:var(--green)}
+.fsel option,.fsel optgroup{background:var(--bg2);color:var(--text)}
+
+/* quick chips */
+.quick-chips{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;margin-top:.8rem}
+.qchip{font-family:var(--mono);font-size:.68rem;letter-spacing:.05em;color:var(--dim);border:1px solid var(--border);padding:.22rem .65rem;border-radius:2px;cursor:pointer;background:transparent;transition:all .15s}
+.qchip:hover{border-color:var(--green);color:var(--green);background:var(--gdim)}
+
+/* ── results layout ── */
+.results-layout{display:grid;grid-template-columns:1fr 380px;gap:1.5rem;margin-top:2rem;align-items:start}
+
+/* results list */
+.results-col{}
+.results-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.results-count{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.results-count strong{color:var(--green)}
+
+/* download bar */
+.dl-bar{display:flex;gap:.6rem;flex-wrap:wrap;padding:.9rem 1.2rem;background:var(--bg2);border:1px solid var(--border);border-radius:3px;margin-bottom:1rem;align-items:center}
+.dl-label{font-family:var(--mono);font-size:.65rem;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-right:.3rem}
+.btn-dl{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;padding:.38rem .85rem;border-radius:2px;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--border);background:transparent;color:var(--dim);white-space:nowrap;transition:all .15s}
+.btn-dl:hover{color:var(--green);border-color:var(--green);background:var(--gdim)}
+.btn-dl:disabled{opacity:.35;cursor:not-allowed}
+
+/* protein list rows */
+.protein-list{display:flex;flex-direction:column;gap:1px;background:var(--border);border:1px solid var(--border)}
+.protein-row{background:var(--bg2);display:flex;align-items:center;gap:1rem;padding:.8rem 1rem;cursor:pointer;transition:background .15s;border:none;width:100%;text-align:left}
+.protein-row:hover,.protein-row.selected{background:var(--bg3)}
+.protein-row.selected{border-left:2px solid var(--green)}
+.prow-img{width:52px;height:52px;object-fit:cover;border-radius:2px;flex-shrink:0;filter:saturate(.6) brightness(.9);transition:filter .2s}
+.protein-row:hover .prow-img,.protein-row.selected .prow-img{filter:saturate(1) brightness(1)}
+.prow-info{flex:1;min-width:0}
+.prow-id{font-family:var(--mono);font-size:.88rem;font-weight:500;letter-spacing:.08em;color:var(--text);margin-bottom:.15rem}
+.prow-score{font-family:var(--mono);font-size:.62rem;color:var(--muted)}
+.prow-arrow{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+
+.load-more-btn{width:100%;margin-top:1px;background:var(--bg2);border:none;border-top:1px solid var(--border);color:var(--dim);font-family:var(--mono);font-size:.72rem;letter-spacing:.07em;padding:1rem;cursor:pointer;transition:all .15s;display:none}
+.load-more-btn:hover{background:var(--bg3);color:var(--green)}
+
+/* ── detail panel (right side) ── */
+.detail-col{position:sticky;top:80px}
+.detail-panel{background:var(--bg2);border:1px solid var(--border);border-radius:4px;overflow:hidden;min-height:300px}
+.detail-empty{padding:3rem 2rem;text-align:center;font-family:var(--mono);font-size:.75rem;color:var(--muted);line-height:1.8}
+
+/* detail header */
+.dp-header{padding:1.2rem;border-bottom:1px solid var(--border);display:flex;gap:1rem;align-items:center}
+.dp-img{width:72px;height:72px;object-fit:cover;border-radius:2px;flex-shrink:0}
+.dp-id{font-family:var(--mono);font-size:1.1rem;font-weight:500;letter-spacing:.08em;color:var(--text);margin-bottom:.2rem}
+.dp-title{font-family:var(--mono);font-size:.65rem;color:var(--dim);line-height:1.5}
+.dp-links{display:flex;gap:.5rem;margin-top:.5rem}
+.dp-link{font-family:var(--mono);font-size:.62rem;color:var(--green);text-decoration:none;border:1px solid var(--borderB);padding:.18rem .5rem;border-radius:2px;transition:background .15s}
+.dp-link:hover{background:var(--gdim)}
+
+/* detail body sections */
+.dp-body{padding:0}
+.dp-section{padding:.9rem 1.2rem;border-bottom:1px solid var(--border)}
+.dp-section:last-child{border-bottom:none}
+.dp-sec-title{font-family:var(--mono);font-size:.6rem;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:.6rem}
+.dp-row{display:flex;align-items:baseline;gap:.6rem;margin-bottom:.35rem}
+.dp-key{font-family:var(--mono);font-size:.65rem;color:var(--muted);width:120px;flex-shrink:0}
+.dp-val{font-family:var(--mono);font-size:.72rem;color:var(--text);word-break:break-all;line-height:1.5}
+.dp-val a{color:var(--blue);text-decoration:none}
+.dp-val a:hover{text-decoration:underline}
+
+/* tags/pills inside detail */
+.dp-tags{display:flex;flex-wrap:wrap;gap:.35rem}
+.dp-tag{font-family:var(--mono);font-size:.62rem;letter-spacing:.04em;padding:.18rem .55rem;border-radius:2px;border:1px solid var(--border)}
+.dp-tag.ligand{color:var(--yellow);border-color:rgba(232,200,78,.3);background:rgba(232,200,78,.06)}
+.dp-tag.uniprot{color:var(--blue);border-color:rgba(78,184,232,.3);background:rgba(78,184,232,.06)}
+.dp-tag.method{color:var(--green);border-color:var(--borderB);background:var(--gdim)}
+.dp-tag.organism{color:var(--dim);border-color:var(--border)}
+
+/* loading spinner */
+.dp-loading{padding:2.5rem;text-align:center;font-family:var(--mono);font-size:.72rem;color:var(--green);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* state messages */
+.state-msg{font-family:var(--mono);font-size:.78rem;padding:3rem 2rem;text-align:center;color:var(--muted);border:1px solid var(--border);border-radius:3px;line-height:1.8}
+.state-msg.loading{color:var(--green)}
+.state-msg.error{color:var(--red);border-color:rgba(232,112,112,.3)}
+
+/* progress overlay */
+.prog-overlay{display:none;position:fixed;inset:0;z-index:999;background:rgba(7,13,10,.87);backdrop-filter:blur(8px);align-items:center;justify-content:center}
+.prog-overlay.active{display:flex}
+.prog-box{background:var(--bg2);border:1px solid var(--borderB);border-radius:6px;padding:2.5rem 3rem;text-align:center;max-width:400px}
+.prog-title{font-size:1rem;font-weight:700;margin-bottom:.5rem}
+.prog-sub{font-family:var(--mono);font-size:.72rem;color:var(--dim);line-height:1.7;margin-bottom:1.5rem}
+.prog-bar{background:var(--bg3);border-radius:2px;height:3px;overflow:hidden}
+.prog-fill{height:100%;background:var(--green);width:100%;animation:pulse 1.5s ease-in-out infinite}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo"> PDB<span>extractor</span></a>
+  <ul>
+    <li><a href="/" class="active">Home</a></li>
+    <li><a href="https://www.rcsb.org" target="_blank">RCSB ↗</a></li>
+  </ul>
+</nav>
+
+<!-- progress overlay -->
+<div class="prog-overlay" id="prog-overlay">
+  <div class="prog-box">
+    <div class="prog-title">Downloading</div>
+    <div class="prog-sub" id="prog-msg">Fetching files from RCSB...<br/>Do not close this tab.</div>
+    <div class="prog-bar"><div class="prog-fill"></div></div>
+  </div>
+</div>
+
+<div class="page">
+
+  <!-- search hero -->
+  <div class="search-hero">
+    <div class="sh-title">Extract data from RCSB PDB</div>
+    <p class="sh-sub">Search proteins, ligands, genes, PDB IDs and download metadata instantly</p>
+
+    <div class="search-box">
+      <div class="search-input-wrap">
+        <input id="main-search" type="text"
+          placeholder="Type ATP, 1ATP, kinase, insulin, EGFR ..." />
+        <button class="btn-go" onclick="runSearch(true)">Search →</button>
+      </div>
+
+      <!-- filters -->
+      <div class="filter-strip">
+
+  <input
+    type="text"
+    id="f-organism"
+    placeholder="Organism (e.g. Homo sapiens)"
+    class="ftext"
+  />
+
+  <div class="fsel-wrap">
+    <select id="f-method" class="fsel">
+      <option value="">Any method</option>
+      <option value="X-RAY DIFFRACTION">X-Ray Diffraction</option>
+      <option value="ELECTRON MICROSCOPY">Electron Microscopy</option>
+      <option value="SOLUTION NMR">Solution NMR</option>
+      <option value="NEUTRON DIFFRACTION">Neutron Diffraction</option>
+      <option value="SOLID-STATE NMR">Solid-State NMR</option>
+    </select>
+  </div>
+
+</div>
+    </div>
+  </div>
+
+  <!-- results + detail side-by-side -->
+  <div class="results-layout" id="results-layout" style="display:none">
+
+    <!-- LEFT: result list -->
+    <div class="results-col">
+
+      <div class="results-meta">
+        <div class="results-count" id="results-count"></div>
+      </div>
+
+      <!-- download bar -->
+      <div class="dl-bar">
+        <span class="dl-label">Download:</span>
+        <button class="btn-dl" id="btn-dl-ids" onclick="downloadIds()">⬇ PDB IDs (.txt)</button>
+        <button class="btn-dl" id="btn-dl-ligands" onclick="downloadLigands()">⬇ Ligand IDs (.txt)</button>
+        <button class="btn-dl" id="btn-dl-fasta" onclick="downloadFasta()">⬇ FASTA sequences (.zip)</button>
+        <button class="btn-dl" id="btn-dl-zip" onclick="downloadZip()">⬇ Chain A structures (.zip)</button>
+        <button class="btn-dl" id="btn-dl-meta" onclick="downloadMetadata()">⬇ Metadata CSV</button>
+      </div>
+
+      <div id="protein-list-wrap">
+        <div class="state-msg">// results appear here</div>
+      </div>
+
+      <button class="load-more-btn" id="load-more-btn" onclick="loadMore()">Load more →</button>
+    </div>
+
+    <!-- RIGHT: detail panel -->
+    <div class="detail-col">
+      <div class="detail-panel" id="detail-panel">
+        <div class="detail-empty">
+          // click any structure to see details —<br/>
+          ligands · UniProt · PubMed · method<br/>
+          mutation count · crystal conditions
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- initial state before search -->
+  <div id="initial-state">
+    <div class="state-msg" style="margin-top:1rem">// enter a search term above to begin</div>
+  </div>
+
+</div>
+
+<script>
+const PAGE_SIZE    = 25;
+let currentQ       = '';
+let currentOffset  = 0;
+let totalAvailable = 0;
+let allCards       = [];
+let selectedPdbId  = null;
+
+// ── helpers ─────────────────────────────────────────────────
+function getOrganism() {
+  return document.getElementById('f-organism').value.trim();
+}
+function getMethod()    { return document.getElementById('f-method').value; }
+
+function filterQS() {
+
+  const o = getOrganism();
+  const m = getMethod();
+
+  let p = '';
+
+  if (o) {
+    p += `&organism=${encodeURIComponent(o)}`;
+  }
+
+  if (m) {
+    p += `&method=${encodeURIComponent(m)}`;
+  }
+
+  return p;
+}
+
+function setQ(val) {
+  document.getElementById('main-search').value = val;
+  runSearch(true);
+}
+
+// ── search ───────────────────────────────────────────────────
+async function runSearch(reset = false) {
+  const q = document.getElementById('main-search').value.trim();
+  if (!q) return;
+
+  if (reset) {
+    currentQ      = q;
+    currentOffset = 0;
+    allCards      = [];
+    selectedPdbId = null;
+    document.getElementById('initial-state').style.display = 'none';
+    document.getElementById('results-layout').style.display = 'grid';
+    document.getElementById('protein-list-wrap').innerHTML  =
+      `<div class="state-msg loading">// searching RCSB PDB for "${q}" ...</div>`;
+    document.getElementById('results-count').textContent = '';
+    document.getElementById('load-more-btn').style.display = 'none';
+    document.getElementById('detail-panel').innerHTML =
+      `<div class="detail-empty">// click any result to see details</div>`;
+  }
+
+  try {
+    const url  = `/universal/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&start=${currentOffset}${filterQS()}`;
+    const res  = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    totalAvailable = data.totalAvailable || 0;
+    const items    = data.results || [];
+    allCards       = [...allCards, ...items];
+    currentOffset += items.length;
+
+    if (allCards.length === 0) {
+      document.getElementById('protein-list-wrap').innerHTML =
+        `<div class="state-msg">// no results found for "${q}".<br/>Try a different keyword or remove filters.</div>`;
+      document.getElementById('results-count').textContent = '';
+      return;
+    }
+
+    document.getElementById('results-count').innerHTML =
+      `showing <strong>${allCards.length}</strong> of <strong>${totalAvailable}</strong> structures`;
+
+    renderList(allCards);
+
+    const btn = document.getElementById('load-more-btn');
+    if (allCards.length < totalAvailable) {
+      btn.style.display = 'block';
+      btn.textContent   = `Load more — ${totalAvailable - allCards.length} remaining →`;
+    } else {
+      btn.style.display = 'none';
+    }
+
+  } catch(e) {
+    document.getElementById('protein-list-wrap').innerHTML =
+      `<div class="state-msg error">// error: ${e.message}<br/>Is server running on port 3000?</div>`;
+  }
+}
+
+async function loadMore() {
+  const btn = document.getElementById('load-more-btn');
+  btn.textContent = '// loading ...'; btn.disabled = true;
+  try {
+    const url  = `/universal/search?q=${encodeURIComponent(currentQ)}&limit=${PAGE_SIZE}&start=${currentOffset}${filterQS()}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    const items = data.results || [];
+    allCards    = [...allCards, ...items];
+    currentOffset += items.length;
+
+    document.getElementById('results-count').innerHTML =
+      `showing <strong>${allCards.length}</strong> of <strong>${totalAvailable}</strong> structures`;
+    renderList(allCards);
+
+    if (allCards.length < totalAvailable) {
+      btn.textContent = `Load more — ${totalAvailable - allCards.length} remaining →`;
+      btn.disabled    = false;
+    } else { btn.style.display = 'none'; }
+  } catch { btn.textContent = 'Load more →'; btn.disabled = false; }
+}
+
+// ── render result rows ────────────────────────────────────────
+function renderList(items) {
+  const html = items.map(item => `
+    <button class="protein-row ${selectedPdbId === item.pdbId ? 'selected':''}"
+      onclick="selectEntry('${item.pdbId}')">
+      <img class="prow-img"
+        src="${item.image}"
+        alt="${item.pdbId}"
+        onerror="this.src='https://placehold.co/52x52/0e1812/38d26e?text=${item.pdbId}'" />
+      <div class="prow-info">
+        <div class="prow-id">${item.pdbId}</div>
+        <div class="prow-score">relevance score: ${(item.score||0).toFixed(3)}</div>
+      </div>
+      <span class="prow-arrow">→</span>
+    </button>
+  `).join('');
+
+  document.getElementById('protein-list-wrap').innerHTML =
+    `<div class="protein-list">${html}</div>`;
+}
+
+// ── select entry → fetch enriched data ──────────────────────
+async function selectEntry(pdbId) {
+  selectedPdbId = pdbId;
+  renderList(allCards); // re-render to highlight selected
+
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = `<div class="dp-loading">// fetching data for ${pdbId} ...</div>`;
+
+  try {
+    const res  = await fetch(`/universal/entry/${pdbId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+
+    // ── ligand tags ──
+    const ligandTags = d.ligands.length
+      ? d.ligands.map(l =>
+          `<span class="dp-tag ligand" title="${l.name || ''}">${l.id}${l.name ? ' — '+l.name : ''}</span>`
+        ).join('')
+      : '<span style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">none recorded</span>';
+
+    // ── uniprot tags ──
+    const uniprotTags = d.uniprotIds.length
+      ? d.uniprotIds.map(u =>
+          `<a class="dp-tag uniprot" href="https://www.uniprot.org/uniprot/${u}" target="_blank">${u} ↗</a>`
+        ).join('')
+      : '<span style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">none</span>';
+
+    // ── method tags ──
+    const methodTags = d.methods.length
+      ? d.methods.map(m => `<span class="dp-tag method">${m}</span>`).join('')
+      : '<span style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">—</span>';
+
+    // ── organism tags ──
+    const orgTags = d.organisms.length
+      ? d.organisms.map(o => `<span class="dp-tag organism">${o}</span>`).join('')
+      : '<span style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">—</span>';
+
+    // ── crystal conditions ──
+    const crystalHtml = d.crystalConditions.length
+      ? d.crystalConditions.map(c => {
+          let parts = [];
+          if (c.details) parts.push(`<div class="dp-row"><span class="dp-key">conditions</span><span class="dp-val">${c.details}</span></div>`);
+          if (c.temp)    parts.push(`<div class="dp-row"><span class="dp-key">temperature</span><span class="dp-val">${c.temp} K</span></div>`);
+          if (c.pH)      parts.push(`<div class="dp-row"><span class="dp-key">pH</span><span class="dp-val">${c.pH}</span></div>`);
+          return parts.join('');
+        }).join('')
+      : '<div style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">not available</div>';
+
+    panel.innerHTML = `
+      <!-- header -->
+      <div class="dp-header">
+        <img class="dp-img" src="${d.image}"
+          onerror="this.src='https://placehold.co/72x72/0e1812/38d26e?text=${pdbId}'" />
+        <div>
+          <div class="dp-id">${d.pdbId}</div>
+          <div class="dp-title">${d.title || '—'}</div>
+          <div class="dp-links">
+            <a class="dp-link" href="${d.rcsbLink}" target="_blank">RCSB ↗</a>
+            ${d.pubmedLink ? `<a class="dp-link" href="${d.pubmedLink}" target="_blank">PubMed ↗</a>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="dp-body">
+
+        <!-- Ligands -->
+        <div class="dp-section">
+          <div class="dp-sec-title">Ligands bound</div>
+          <div class="dp-tags">${ligandTags}</div>
+        </div>
+
+        <!-- UniProt -->
+        <div class="dp-section">
+          <div class="dp-sec-title">UniProt IDs</div>
+          <div class="dp-tags">${uniprotTags}</div>
+        </div>
+
+        <!-- Identifiers -->
+        <div class="dp-section">
+          <div class="dp-sec-title">Identifiers</div>
+          <div class="dp-row">
+            <span class="dp-key">PDB ID</span>
+            <span class="dp-val">${d.pdbId}</span>
+          </div>
+          <div class="dp-row">
+            <span class="dp-key">PubMed ID</span>
+            <span class="dp-val">
+              ${d.pubmedId
+                ? `<a href="${d.pubmedLink}" target="_blank">${d.pubmedId} ↗</a>`
+                : '—'}
+            </span>
+          </div>
+        </div>
+
+        <!-- Experiment -->
+        <div class="dp-section">
+          <div class="dp-sec-title">Experiment</div>
+          <div class="dp-row">
+            <span class="dp-key">Method</span>
+            <span class="dp-val"><div class="dp-tags">${methodTags}</div></span>
+          </div>
+          <div class="dp-row">
+            <span class="dp-key">Organism</span>
+            <span class="dp-val"><div class="dp-tags">${orgTags}</div></span>
+          </div>
+          <div class="dp-row">
+            <span class="dp-key">Mutations</span>
+            <span class="dp-val">${d.mutationCount > 0 ? d.mutationCount + ' total' : 'none recorded'}</span>
+          </div>
+        </div>
+
+        <!-- Crystal conditions -->
+        <div class="dp-section">
+          <div class="dp-sec-title">Crystal / growth conditions</div>
+          ${crystalHtml}
+        </div>
+
+        <!-- Download this entry -->
+        <div class="dp-section">
+          <div class="dp-sec-title">Download this structure</div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn-dl" onclick="downloadSingleChainA('${d.pdbId}')">⬇ Chain A (.pdb)</button>
+            <a class="btn-dl" href="https://files.rcsb.org/download/${d.pdbId}.cif" target="_blank">⬇ Full CIF ↗</a>
+            <a class="btn-dl" href="https://files.rcsb.org/download/${d.pdbId}.pdb" target="_blank">⬇ Full PDB ↗</a>
+          </div>
+        </div>
+
+      </div>
+    `;
+
+  } catch(e) {
+    panel.innerHTML = `<div class="detail-empty">// error loading ${pdbId}: ${e.message}</div>`;
+  }
+}
+
+// ── download single chain A ──────────────────────────────────
+function downloadSingleChainA(pdbId) {
+  document.getElementById('prog-overlay').classList.add('active');
+  document.getElementById('prog-msg').innerHTML = `Fetching chain A for ${pdbId}...<br/>Do not close this tab.`;
+  window.location.href = `/universal/download/structures?q=${encodeURIComponent(pdbId)}`;
+  setTimeout(() => document.getElementById('prog-overlay').classList.remove('active'), 4000);
+}
+
+// ── download all IDs ─────────────────────────────────────────
+function downloadIds() {
+  if (totalAvailable === 0) { alert('Run a search first.'); return; }
+  const btn = document.getElementById('btn-dl-ids');
+  btn.textContent = '// fetching ...'; btn.disabled = true;
+  const url = `/universal/download/ids?q=${encodeURIComponent(currentQ)}${filterQS()}`;
+  const a = document.createElement('a');
+  a.href = url; a.download = `search_pdb_ids.txt`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => { btn.textContent = '⬇ PDB IDs (.txt)'; btn.disabled = false; }, 3000);
+}
+
+// ── download all structures ──────────────────────────────────
+function downloadZip() {
+  if (totalAvailable === 0) { alert('Run a search first.'); return; }
+  if (!confirm(`Download ${totalAvailable} chain A structure files as zip?\n\nThis may take several minutes for large result sets.`)) return;
+  document.getElementById('prog-overlay').classList.add('active');
+  document.getElementById('prog-msg').innerHTML = `Fetching ${totalAvailable} structures...<br/>Do not close this tab.`;
+  window.location.href = `/universal/download/structures?q=${encodeURIComponent(currentQ)}${filterQS()}`;
+  setTimeout(() => document.getElementById('prog-overlay').classList.remove('active'), 5000);
+}
+
+function downloadLigands() {
+  if (totalAvailable === 0) { alert('Run a search first.'); return; }
+  const btn = document.getElementById('btn-dl-ligands');
+  btn.textContent = '// fetching ...'; btn.disabled = true;
+  const url = `/universal/download/ligands?q=${encodeURIComponent(currentQ)}${filterQS()}`;
+  const a = document.createElement('a');
+  a.href = url; a.download = 'ligand_ids.txt';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => { btn.textContent = '⬇ Ligand IDs (.txt)'; btn.disabled = false; }, 3000);
+}
+
+function downloadFasta() {
+  if (totalAvailable === 0) { alert('Run a search first.'); return; }
+  if (!confirm(`Download FASTA sequences for ${totalAvailable} structures as zip?\n\nThis may take several minutes for large result sets.`)) return;
+  document.getElementById('prog-overlay').classList.add('active');
+  document.getElementById('prog-msg').innerHTML = `Fetching FASTA for ${totalAvailable} structures...<br/>Do not close this tab.`;
+  window.location.href = `/universal/download/fasta?q=${encodeURIComponent(currentQ)}${filterQS()}`;
+  setTimeout(() => document.getElementById('prog-overlay').classList.remove('active'), 5000);
+}
+
+function downloadMetadata() {
+  if (totalAvailable === 0) { alert('Run a search first.'); return; }
+
+  const url = `/universal/download/metadata?q=${encodeURIComponent(currentQ)}${filterQS()}`;
+
+  const a = document.createElement('a');
+
+  a.href = url;
+  a.download = 'metadata.csv';
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+// ── enter key ────────────────────────────────────────────────
+document.getElementById('main-search').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runSearch(true);
+});
+
+// ── pre-fill from URL param: explorer.html?q=ATP ─────────────
+const up = new URLSearchParams(location.search);
+if (up.get('q')) {
+  document.getElementById('main-search').value = up.get('q');
+  runSearch(true);
+}
+</script>
+</body>
+</html>
